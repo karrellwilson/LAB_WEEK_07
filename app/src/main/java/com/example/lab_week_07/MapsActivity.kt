@@ -17,12 +17,17 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import com.example.lab_week_07.databinding.ActivityMapsBinding
+import com.google.android.gms.location.LocationServices
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var mMap: GoogleMap
     private lateinit var binding: ActivityMapsBinding
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
+
+    private val fusedLocationProviderClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,10 +44,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 ActivityResultContracts.RequestPermission()
             ) { isGranted: Boolean ->
                 if (isGranted) {
-
                     getLastLocation()
                 } else {
-
                     showPermissionRationale {
                         requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
@@ -50,29 +53,23 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
     }
 
-
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
 
-
         when {
-
             hasLocationPermission() -> {
                 getLastLocation()
             }
-
             shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) -> {
                 showPermissionRationale {
                     requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
             }
-
             else -> {
                 requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
         }
     }
-
 
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -80,7 +77,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
-
 
     private fun showPermissionRationale(positiveAction: () -> Unit) {
         AlertDialog.Builder(this)
@@ -97,10 +93,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun getLastLocation() {
-        Log.d("MapsActivity", "getLastLocation() called. Permission granted.")
-
         if (hasLocationPermission()) {
-            mMap.isMyLocationEnabled = true
+            try {
+                fusedLocationProviderClient.lastLocation
+                    .addOnSuccessListener { location ->
+                        location?.let {
+                            val userLocation = LatLng(location.latitude, location.longitude)
+                            updateMapLocation(userLocation)
+                            addMarkerAtLocation(userLocation, "You")
+                        }
+                    }
+            } catch (e: SecurityException) {
+                Log.e("MapsActivity", "SecurityException: ${e.message}")
+            }
+        } else {
+            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+    }
+
+    private fun updateMapLocation(location: LatLng) {
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 7f))
+    }
+
+    private fun addMarkerAtLocation(location: LatLng, title: String) {
+        mMap.addMarker(MarkerOptions().title(title).position(location))
     }
 }
